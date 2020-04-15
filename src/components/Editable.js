@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react'
+import React, { useEffect, useRef } from 'react'
 import { connect } from 'react-redux'
 import he from 'he'
 import classNames from 'classnames'
@@ -16,16 +16,16 @@ import { shortcutEmitter } from '../shortcuts'
 
 // constants
 import {
+  EDIT_THROTTLE,
   EM_TOKEN,
   ROOT_TOKEN,
-  TUTORIAL2_STEP_CONTEXT1_PARENT,
   TUTORIAL2_STEP_CONTEXT1,
-  TUTORIAL2_STEP_CONTEXT2_PARENT,
+  TUTORIAL2_STEP_CONTEXT1_PARENT,
   TUTORIAL2_STEP_CONTEXT2,
+  TUTORIAL2_STEP_CONTEXT2_PARENT,
+  TUTORIAL_CONTEXT,
   TUTORIAL_CONTEXT1_PARENT,
   TUTORIAL_CONTEXT2_PARENT,
-  TUTORIAL_CONTEXT,
-  EDIT_THROTTLE
 } from '../constants'
 
 import {
@@ -71,7 +71,7 @@ const stopPropagation = e => e.stopPropagation()
   @contexts indicates that the thought is a context rendered as a child, and thus needs to be displayed as the context while maintaining the correct thoughts path
 */
 // use rank instead of headRank(thoughtsRanked) as it will be different for context view
-const Editable = ({ isEditing, thoughtsRanked, contextChain, cursorOffset, showContexts, rank, dispatch }) => {
+const Editable = ({ disabled, isEditing, thoughtsRanked, contextChain, cursorOffset, showContexts, rank, dispatch }) => {
   const thoughts = pathToContext(thoughtsRanked)
   const thoughtsResolved = contextChain.length ? chain(contextChain, thoughtsRanked) : thoughtsRanked
   const value = head(showContexts ? contextOf(thoughts) : thoughts) || ''
@@ -211,7 +211,7 @@ const Editable = ({ isEditing, thoughtsRanked, contextChain, cursorOffset, showC
   // this handler does meta validation and calls thoughtChangeHandler immediately or using throttled reference
   const onChangeHandler = e => {
     // NOTE: When Subthought components are re-rendered on edit, change is called with identical old and new values (?) causing an infinite loop
-    const newValue = he.decode(strip(e.target.value))
+    const newValue = he.decode(strip(e.target.value, { preserveFormatting: true }))
     const oldValue = oldValueRef.current
 
     // TODO: Disable keypress
@@ -282,10 +282,12 @@ const Editable = ({ isEditing, thoughtsRanked, contextChain, cursorOffset, showC
         : thoughtsRanked
 
       // text/plain may contain text that ultimately looks like html (contains <li>) and should be parsed as html
+      // pass the untrimmed old value to importText so that the whitespace is not loss when combining the existing value with the pasted value
+      const rawDestValue = strip(contentRef.current.innerHTML, { preventTrim: true })
       importText(thoughtsRankedLive, isHTML(plainText)
         ? plainText
-        : htmlText || plainText
-      )
+        : htmlText || plainText,
+      { rawDestValue })
     }
   }
 
@@ -347,8 +349,12 @@ const Editable = ({ isEditing, thoughtsRanked, contextChain, cursorOffset, showC
 
   // focus can only be prevented in mousedown event
   const onMouseDown = e => {
+    // if editing is disabled, set the cursor since onFocus will not trigger
+    if (disabled) {
+      setCursorOnThought()
+    }
     // disable focus on hidden thoughts
-    if (isElementHiddenByAutoFocus(e.target)) {
+    else if (isElementHiddenByAutoFocus(e.target)) {
       e.preventDefault()
       store.dispatch(cursorBack())
     }
@@ -362,7 +368,11 @@ const Editable = ({ isEditing, thoughtsRanked, contextChain, cursorOffset, showC
 
     showContexts = showContexts || isContextViewActive(thoughtsRanked, { state })
 
-    if (
+    // if editing is disabled, set the cursor since onFocus will not trigger
+    if (disabled) {
+      setCursorOnThought()
+    }
+    else if (
       !globals.touching &&
       // not sure if this can happen, but I observed some glitchy behavior with the cursor moving when a drag and drop is completed so check dragInProgress to be safe
       !state.dragInProgress &&
@@ -381,6 +391,7 @@ const Editable = ({ isEditing, thoughtsRanked, contextChain, cursorOffset, showC
   }
 
   return <ContentEditable
+    disabled={disabled}
     innerRef={contentRef}
     className={classNames({
       editable: true,

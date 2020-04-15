@@ -9,33 +9,32 @@ Test:
 
 */
 
-import React, { useState, useEffect } from 'react'
+import React, { useEffect, useState } from 'react'
 import { connect } from 'react-redux'
 import { CSSTransition, TransitionGroup } from 'react-transition-group'
 import { shortcutById } from '../shortcuts'
 import { isTouchEnabled } from '../browser'
 
 import {
-  overlayReveal,
   overlayHide,
-  scrollPrioritize
+  overlayReveal,
+  scrollPrioritize,
 } from '../action-creators/toolbar'
 
 // constants
 import {
-  EM_TOKEN,
-  SHORTCUT_HINT_OVERLAY_TIMEOUT,
-  SCROLL_PRIORITIZATION_TIMEOUT,
-  TOOLBAR_DEFAULT_SHORTCUTS,
-  DEFAULT_FONT_SIZE,
   BASE_FONT_SIZE,
+  DEFAULT_FONT_SIZE,
+  SCROLL_PRIORITIZATION_TIMEOUT,
+  SHORTCUT_HINT_OVERLAY_TIMEOUT,
+  TOOLBAR_DEFAULT_SHORTCUTS,
 } from '../constants'
 
 // util
 import {
   attribute,
   getSetting,
-  meta,
+  isDocumentEditable,
   subtree,
 } from '../util'
 
@@ -43,6 +42,9 @@ import {
 import Scale from './Scale'
 import TriangleLeft from './TriangleLeft'
 import TriangleRight from './TriangleRight'
+
+// selectors
+import theme from '../selectors/theme'
 
 const ARROW_SCROLL_BUFFER = 20
 const fontSizeLocal = +(localStorage['Settings/Font Size'] || DEFAULT_FONT_SIZE)
@@ -54,7 +56,7 @@ const mapStateToProps = state => {
     cursorOnTableView: cursor && attribute(cursor, '=view') === 'Table',
     cursorOnAlphabeticalSort: cursor && attribute(cursor, '=sort') === 'Alphabetical',
     cursorOnPinView: cursor && attribute(cursor, '=pin') === 'true',
-    dark: !meta([EM_TOKEN, 'Settings', 'Theme']).Light,
+    dark: theme(state) !== 'Light',
     isLoading,
     scale: (isLoading ? fontSizeLocal : getSetting('Font Size') || DEFAULT_FONT_SIZE) / BASE_FONT_SIZE,
     scrollPrioritized,
@@ -124,9 +126,10 @@ const Toolbar = ({ cursorOnTableView, cursorOnAlphabeticalSort, cursorOnPinView,
   const userShortcutIds = subtree(['Settings', 'Toolbar', 'Visible:'])
     .map(subthought => subthought.value)
     .filter(shortcutById)
-  const shortcutIds = userShortcutIds.length > 0
+  const allShortcutIds = userShortcutIds.length > 0
     ? userShortcutIds
     : TOOLBAR_DEFAULT_SHORTCUTS
+  const shortcutIds = isDocumentEditable() ? allShortcutIds : ['search', 'exportContext']
 
   /**********************************************************************
    * Event Handlers
@@ -181,8 +184,8 @@ const Toolbar = ({ cursorOnTableView, cursorOnAlphabeticalSort, cursorOnPinView,
    **********************************************************************/
 
   return (
-    <div className='toolbar-container'>
-      <div className="toolbar-mask" />
+    <div className='toolbar-container' style={!isDocumentEditable() ? { right: 20 } : null}>
+      {isDocumentEditable() && <div className="toolbar-mask" />}
       <Scale amount={scale}>
         <div
           id='toolbar'
@@ -225,15 +228,18 @@ const Toolbar = ({ cursorOnTableView, cursorOnAlphabeticalSort, cursorOnPinView,
           })}
           <span id='right-arrow' className={rightArrowElementClassName}><TriangleRight width='6' fill='gray' /></span>
         </div>
-        <TransitionGroup>
-          {toolbarOverlay ?
-            <CSSTransition timeout={200} classNames='fade'>
-              <div className={isTouchEnabled() ? 'touch-toolbar-overlay' : 'toolbar-overlay'}>
-                <div className={'overlay-name'}>{overlayName}</div>
-                <div className={'overlay-body'}>{overlayDescription}</div>
-              </div>
-            </CSSTransition> : null}
-        </TransitionGroup>
+        {/* min-width is a hack to keep toolbar from jumping when the overlay is shown. Only a problem in publish mode when there are few buttons in the toolbar */}
+        <div style={{ minWidth: 100 }}>
+          <TransitionGroup>
+            {toolbarOverlay ?
+              <CSSTransition timeout={200} classNames='fade'>
+                <div className={isTouchEnabled() ? 'touch-toolbar-overlay' : 'toolbar-overlay'}>
+                  <div className={'overlay-name'}>{overlayName}</div>
+                  <div className={'overlay-body'}>{overlayDescription}</div>
+                </div>
+              </CSSTransition> : null}
+          </TransitionGroup>
+        </div>
       </Scale>
     </div>
   )

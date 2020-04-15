@@ -10,7 +10,10 @@ import Superscript from './Superscript'
 // util
 import {
   ancestors,
+  strip,
 } from '../util'
+
+const publish = new URLSearchParams(window.location.search).get('publish') != null
 
 /** Main navigation breadcrumbs */
 // NOTE: Exporting as default breaks /build (???)
@@ -32,9 +35,9 @@ export const Breadcrumbs = ({ path, thoughtsLimit, charLimit, className }) => {
     ({
       ...thought,
       // subtract 2 so that additional '...' is still within the char limit
-      label: (thought.value.length > charLimit - 2) ?
+      label: strip((thought.value.length > charLimit - 2) ?
         thought.value.substr(0, charLimit - 2) + '...'
-        : thought.value
+        : thought.value)
     }))
     : path
 
@@ -59,7 +62,7 @@ export const Breadcrumbs = ({ path, thoughtsLimit, charLimit, className }) => {
             */}
             {!thoughtRanked.isOverflow ? (
               <span>
-                {!isMobile || i > 0 ? <span className='breadcrumb-divider'> • </span> : null}
+                {!publish && (!isMobile || i > 0) ? <span className='breadcrumb-divider'> • </span> : null}
                 <Link thoughtsRanked={subthoughts} label={thoughtRanked.label} />
                 <Superscript thoughtsRanked={subthoughts} />
               </span>

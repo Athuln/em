@@ -1,4 +1,5 @@
 import React from 'react'
+import { isMobile } from '../browser'
 import { store } from '../store'
 import { error } from '../action-creators/error'
 
@@ -18,6 +19,7 @@ import {
   getSetting,
   headValue,
   isContextViewActive,
+  isDocumentEditable,
   meta,
   pathToContext,
 } from '../util'
@@ -72,6 +74,7 @@ export default {
   keyboard: { key: 'Enter' },
   gesture: 'rd',
   svg: Icon,
+  canExecute: () => isDocumentEditable(),
   exec
 }
 
@@ -80,5 +83,9 @@ export const newThoughtAliases = {
   id: 'newThoughtAliases',
   hideFromInstructions: true,
   gesture: ['rdld', 'rdldl', 'rdldld', 'rld', 'rldl', 'rldld', 'rldldl'],
+  // on mobile, the shift key should cause a normal newThought, not newThoughtAbove
+  // smuggle it in with the aliases
+  ...isMobile ? { keyboard: { key: 'Enter', shift: true } } : null,
+  canExecute: () => isDocumentEditable(),
   exec
 }

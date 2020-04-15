@@ -5,11 +5,12 @@ import { store } from '../store'
 import {
   attribute,
   contextOf,
+  isDocumentEditable,
   pathToContext,
 } from '../util'
 
 // action-creators
-import { cursorUp } from '../action-creators/cursorUp'
+import { cursorBack } from '../action-creators/cursorBack'
 import { outdent } from '../action-creators/outdent'
 
 // selectors
@@ -30,7 +31,7 @@ export default {
   description: `Move the current thought to the next sibling of its context. Really should be called "dedent".`,
   keyboard: { key: 'Tab', shift: true },
   svg: Icon,
-  canExecute: () => store.getState().cursor,
+  canExecute: () => isDocumentEditable() && store.getState().cursor,
   exec: e => {
     const state = store.getState()
     const { cursor } = state
@@ -42,6 +43,6 @@ export default {
     const contextGrandparent = contextOf(contextOf(pathToContext(thoughtsRanked)))
     const isTable = attribute(contextGrandparent, '=view') === 'Table'
 
-    store.dispatch(isTable ? cursorUp({ target: e.target }) : outdent())
+    store.dispatch(isTable ? cursorBack({ target: e.target }) : outdent())
   }
 }

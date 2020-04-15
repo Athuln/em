@@ -65,7 +65,7 @@ const toggleContextViewShortcut = shortcutById('toggleContextView')
 assert(subthoughtShortcut)
 assert(toggleContextViewShortcut)
 
-const PAGINATION_SIZE = 50
+const PAGINATION_SIZE = 100
 
 /********************************************************************
  * mapStateToProps
@@ -345,7 +345,7 @@ const SubthoughtsComponent = ({
       const match = accum[child.rank]
       if (match) {
         console.warn('Duplicate child rank', match[0], child)
-        console.log('thoughtsRanked', thoughtsRanked)
+        console.warn('thoughtsRanked', thoughtsRanked)
       }
       return {
         ...accum,

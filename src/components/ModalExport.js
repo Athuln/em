@@ -1,25 +1,40 @@
-import React, { useState, useEffect } from 'react'
-import { useDispatch, useSelector } from 'react-redux'
-import Modal from './Modal'
-import DropDownMenu from './DropDownMenu'
+import React, { useEffect, useState } from 'react'
+import { useDispatch, useSelector, useStore } from 'react-redux'
 import ArrowDownWhite from '../images/keyboard_arrow_down_352466.svg'
 import ArrowDownBlack from '../images/iconfinder_ic_keyboard_arrow_down_black_352466.svg'
 import ClipboardJS from 'clipboard'
+import globals from '../globals'
+import IpfsHttpClient from 'ipfs-http-client'
 
-//  util's.js
+// constants
+import {
+  RANKED_ROOT,
+} from '../constants'
+
+//  util
 import {
   download,
   ellipsize,
   exportContext,
   getDescendants,
-  getSetting,
   headValue,
+  isRoot,
   pathToContext,
-  timestamp
+  timestamp,
 } from '../util'
 
+// action-creators
 import alert from '../action-creators/alert'
-import globals from '../globals'
+import { error } from '../action-creators/error'
+
+// components
+import Modal from './Modal'
+import DropDownMenu from './DropDownMenu'
+
+// selectors
+import theme from '../selectors/theme'
+
+const ipfs = IpfsHttpClient({ host: 'ipfs.infura.io', port: 5001, protocol: 'https' })
 
 const exportOptions = [
   { type: 'text/plain', label: 'Plain Text', extension: 'txt' },
@@ -30,38 +45,63 @@ const clipboard = new ClipboardJS('.copy-clipboard-btn')
 
 const ModalExport = () => {
 
+  const store = useStore()
   const dispatch = useDispatch()
-  const cursor = useSelector(state => state.cursor)
+  const cursor = useSelector(state => state.cursor || RANKED_ROOT)
+  const cursorLabel = isRoot(cursor) ? 'home' : ellipsize(headValue(cursor))
+  const cursorTitle = isRoot(cursor) ? 'Home' : ellipsize(headValue(cursor), 25)
 
   const [selected, setSelected] = useState(exportOptions[0])
   const [isOpen, setIsOpen] = useState(false)
   const [wrapperRef, setWrapper] = useState()
   const [exportContent, setExportContent] = useState('')
 
-  const dark = getSetting('Theme') !== 'Light'
-  const descendants = cursor ? getDescendants(cursor) : []
-  const exportMessage = cursor ? `Export "${ellipsize(headValue(cursor))}"` + (descendants.length > 0 ? ` and ${descendants.length} subthought${descendants.length === 1 ? '' : 's'} as ${selected.label}` : '') : null
+  const dark = theme(store.getState()) !== 'Light'
+  const themeColor = {
+    color: dark ? 'white' : 'black'
+  }
+  const themeColorWithBackground = dark ? {
+    color: 'black',
+    backgroundColor: 'white',
+  } : {
+    color: 'white',
+    backgroundColor: 'black',
+  }
+
+  const numDescendants = getDescendants(cursor).length
+  const exportWord = navigator.share ? 'Share' : 'Download'
+
+  const exportThoughtsPhrase = isRoot(cursor)
+    ? ` all ${numDescendants} thoughts`
+    : <span>"{cursorLabel}"{numDescendants > 0 ? ` and ${numDescendants} subthought${numDescendants === 1 ? '' : 's'}` : ''}</span>
+  const exportMessage = <span>
+    {exportWord} {exportThoughtsPhrase}
+    <span> as <a style={themeColor} onClick={() => setIsOpen(!isOpen)}>{selected.label}</a></span>
+    .
+  </span>
+  const publishMessage = <span>Publish {exportThoughtsPhrase}.</span>
 
   useEffect(() => {
     document.addEventListener('click', onClickOutside)
 
-    if (cursor) {
-      setExportContent(exportContext(pathToContext(cursor), selected.type))
-    }
+    setExportContent(exportContext(pathToContext(cursor), selected.type))
 
     return () => {
       document.removeEventListener('click', onClickOutside)
     }
   })
 
+  const [publishing, setPublishing] = useState(false)
+  const [publishedCIDs, setPublishedCIDs] = useState([])
+
   clipboard.on('success', function (e) {
-    alert(`Thoughts copied`)
+    alert('Thoughts copied to clipboard')
     clearTimeout(globals.errorTimer)
     globals.errorTimer = window.setTimeout(() => alert(null), 10000)
   })
 
   clipboard.on('error', function (e) {
-    alert(`Thoughts could not be copied`)
+    error('Error copying thoughts')
     clearTimeout(globals.errorTimer)
     globals.errorTimer = window.setTimeout(() => alert(null), 10000)
   })
@@ -75,20 +115,19 @@ const ModalExport = () => {
 
   const onExportClick = () => {
 
-    const exported = exportContext(pathToContext(cursor), selected.type)
-    const title = ellipsize(headValue(cursor))
+    const title = cursorLabel
 
     // use mobile share if it is available
     if (navigator.share) {
       navigator.share({
-        text: exported,
+        text: exportContent,
         title,
       })
     }
     // otherwise download the data with createObjectURL
     else {
       try {
-        download(exported, `em-${title}-${timestamp()}.${selected.extension}`, selected.type)
+        download(exportContent, `em-${title}-${timestamp()}.${selected.extension}`, selected.type)
       }
       catch (e) {
         dispatch({ type: 'error', value: e.message })
@@ -99,13 +138,38 @@ const ModalExport = () => {
     dispatch({ type: 'modalRemindMeLater', id: 'export' })
   }
 
+  const onPublishClick = async () => {
+
+    setPublishing(true)
+    setPublishedCIDs([])
+
+    const cids = []
+
+    // eslint-disable-next-line fp/no-loops
+    for await (const result of ipfs.add(exportContent)) {
+      if (result && result.path) {
+        cids.push(result.path) // eslint-disable-line fp/no-mutating-methods
+        setPublishedCIDs(cids)
+      }
+      else {
+        setPublishing(false)
+        setPublishedCIDs([])
+        error('Publish Error')
+        console.error('Publish Error', result)
+      }
+    }
+
+    setPublishing(false)
+  }
+
   const closeModal = () => {
     alert(null)
     dispatch({ type: 'modalRemindMeLater', id: 'help' })
   }
 
   return (
-    <Modal id='export' title={navigator.share ? 'Share' : 'Download'} className='popup'>
+    <Modal id='export' title='Export' className='popup'>
+
       <div className='modal-export-wrapper'>
         <span className='modal-content-to-export'>{exportMessage}</span>
         <span className='modal-drop-down-holder'>
@@ -115,7 +179,7 @@ const ModalExport = () => {
             height='22px'
             width='22px'
             style={{ cursor: 'pointer' }}
-            onClick={e => setIsOpen(!isOpen)}
+            onClick={() => setIsOpen(!isOpen)}
           />
           <div ref={setWrapper}>
             <DropDownMenu
@@ -131,30 +195,73 @@ const ModalExport = () => {
           </div>
         </span>
       </div>
+
       <div className="cp-clipboard-wrapper">
         <a data-clipboard-text={exportContent} className="copy-clipboard-btn">Copy to clipboard</a>
       </div>
+
       <div className='modal-export-btns-wrapper'>
-        <button className='modal-btn-export' style={dark
-          ? {
-            color: 'black',
-            backgroundColor: 'white',
-          } : {
-            color: 'white',
-            backgroundColor: 'black',
-          }
-        } onClick={onExportClick}
-        >{navigator.share ? 'Share' : 'Download'}</button>
+
+        <button
+          className='modal-btn-export'
+          disabled={!exportContent}
+          onClick={onExportClick}
+          style={themeColorWithBackground}
+        >
+          {exportWord}
+        </button>
+
         <button
           className='modal-btn-cancel'
           style={{
             fontSize: '14px',
-            color: dark ? 'white' : 'black'
+            ...themeColor
           }}
           onClick={closeModal}>
           Cancel
         </button>
+
       </div>
+
+      <div className='modal-export-publish'>
+        {publishedCIDs.length > 0
+          ? <div>
+            Published: {publishedCIDs.map(cid =>
+              <a key={cid} target='_blank' rel='noopener noreferrer' href={`${window.location.protocol}//${window.location.host}/?publish&src=ipfs.io/ipfs/${cid}`}>{cursorTitle}</a>
+            )}
+          </div>
+          : <div>
+            <p>{publishing ? 'Publishing...' : publishMessage}</p>
+            <p className='dim'><i>Note: These thoughts are published permanently. <br/>
+            This action cannot be undone.</i></p>
+          </div>
+        }
+      </div>
+
+      <div className='modal-export-btns-wrapper'>
+
+        <button
+          className='modal-btn-export'
+          disabled={!exportContent || publishing || publishedCIDs.length > 0}
+          onClick={onPublishClick}
+          style={themeColorWithBackground}
+        >
+          Publish
+        </button>
+
+        <button
+          className='modal-btn-cancel'
+          onClick={closeModal}
+          style={{
+            fontSize: '14px',
+            ...themeColor
+          }}
+        >
+          {publishedCIDs.length > 0 ? 'Close' : 'Cancel'}
+        </button>
+
+      </div>
+
     </Modal>
   )
 }

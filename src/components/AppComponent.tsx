@@ -28,13 +28,16 @@ import HamburgerMenu from './HamburgerMenu'
 // util
 import {
   getSetting,
+  isDocumentEditable,
   isTutorial,
 } from '../util'
 
 // action-creators
 import { updateSplitPosition } from '../action-creators/updateSplitPosition'
 
-const darkLocal = localStorage['Settings/Theme'] || 'Dark'
+// selectors
+import theme from '../selectors/theme'
+
 const fontSizeLocal = +(localStorage['Settings/Font Size'] || 16)
 const tutorialLocal = localStorage['Settings/Tutorial'] === 'On'
 
@@ -43,7 +46,7 @@ interface StateProps {
   dark?: boolean;
   dragInProgress: boolean;
   isLoading: boolean;
-  showModal: boolean;
+  showModal: string;
   scale: number;
   showSplitView: boolean;
   splitPosition: number;
@@ -57,7 +60,7 @@ type typeOfState = ReturnType<typeof initialStateResult>
 
 const mapStateToProps = (state: typeOfState): StateProps => {
   const { dragInProgress, isLoading, showModal, splitPosition, showSplitView } = state
-  const dark = (isLoading ? darkLocal : getSetting('Theme')) !== 'Light'
+  const dark = theme(state) !== 'Light'
   const scale = (isLoading ? fontSizeLocal : getSetting('Font Size') || 16) / 16
   return {
     dark,
@@ -116,30 +119,30 @@ const AppComponent: FC<Props> = (props) => {
 
   return (
     <div className={componentClassNames}>
-      <Sidebar />
-      <HamburgerMenu dark={dark} />
+
+      {isDocumentEditable() && <>
+        <Sidebar />
+        <HamburgerMenu dark={dark} />
+      </>}
+
       <MultiGestureIfMobile>
 
         <Alert />
         <ErrorMessage />
         <Status />
-        <Toolbar />
 
         {showModal
 
           // modals
-          ? (
-            <>
-              <ModalWelcome />
-              <ModalHelp />
-              <ModalExport />
-            </>
-          )
+          ? <>
+            <ModalWelcome />
+            <ModalHelp />
+            <ModalExport />
+          </>
 
           // navigation, content, and footer
-          : (
-            <>
-
+          : <>
+              <Toolbar />
               {tutorial && !isLoading ? <Tutorial /> : null}
               <SplitPane
                 style={{ position: 'relative' }}
@@ -162,22 +165,21 @@ const AppComponent: FC<Props> = (props) => {
                   // children required by SplitPane
                   : <div />}
               </SplitPane>
+
               <div className='nav-bottom-wrapper'>
                 <Scale amount={scale}>
 
-                  {/*
-  // @ts-ignore */}
                   <NavBar position='bottom' />
 
                 </Scale>
               </div>
 
-              <Scale amount={scale}>
+              {isDocumentEditable() && <Scale amount={scale}>
                 <Footer />
-              </Scale>
+              </Scale>}
 
             </>
-          )}
+          }
 
       </MultiGestureIfMobile>
     </div>

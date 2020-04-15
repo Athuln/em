@@ -17,10 +17,10 @@ import { cursorBack } from '../action-creators/cursorBack'
 // util
 import {
   asyncFocus,
-  getThoughtsRanked,
   getNextRank,
-  rankThoughtsSequential,
+  getThoughtsRanked,
   pathToContext,
+  rankThoughtsSequential,
   unroot,
 } from '../util'
 
@@ -42,6 +42,7 @@ const mapDispatchToProps = dispatch => ({
       return
     }
 
+    const context = pathToContext(path)
     const newRank = getNextRank(path)
 
     dispatch({
